@@ -55,14 +55,6 @@ def main():
                   args.keepresponse, args.outfilename)
 
 ################################################################################
-class SmartFormatter(argparse.HelpFormatter):
-    def _split_lines(self, text, width):
-        if text.startswith('R|'):
-            return text[2:].splitlines()
-        # this is the RawTextHelpFormatter._split_lines
-        return argparse.HelpFormatter._split_lines(self, text, width)
-
-################################################################################
 def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilename):
     client = Client()
     stime = UTCDateTime(start)
@@ -172,6 +164,14 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
         plt.savefig(outfilename + '.PDF', format='PDF')
     else:
         plt.savefig(net + '_' + sta + '_' + net2 + '_' + sta2 + '.PDF', format='PDF')
+
+################################################################################
+class SmartFormatter(argparse.HelpFormatter):
+    def _split_lines(self, text, width):
+        if text.startswith('R|'):
+            return text[2:].splitlines()
+        # this is the RawTextHelpFormatter._split_lines
+        return argparse.HelpFormatter._split_lines(self, text, width)
 
 ################################################################################
 if __name__ == '__main__':
