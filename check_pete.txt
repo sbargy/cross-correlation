@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+from obspy.clients.fdsn import Client
+from obspy.core import UTCDateTime
+from scipy import signal
+from obspy.signal.cross_correlation import correlate, xcorr_max
+import numpy as np
+import matplotlib.pyplot as plt
+import pickle
+client = Client()
+stime = UTCDateTime('2009-001T00:00:00')
+etime = UTCDateTime('2020-001T00:00:00')
+ctime = stime
+
+import matplotlib as mpl
+mpl.rc('font',family='serif')
+mpl.rc('font',serif='Times')
+#mpl.rc('text', usetex=True)
+mpl.rc('font',size=16)
+
+net = 'II'
+sta = 'AAK'
+
+net2= 'II'
+sta2 = 'AAK'
+calc = True
+
+if calc:
+    times, shifts, vals = [],[], []
+    while ctime < etime:
+        print(ctime)
+        try:
+            st = client.get_waveforms(net,sta,'00', 'BHZ', ctime, ctime + 10)
+            st += client.get_waveforms(net2, sta2, '10', 'BHZ', ctime, ctime + 10)
+            st.resample(1000)
+            st.sort()
+            cc = correlate(st[0].data, st[1].data, 100)
+            shift, val = xcorr_max(cc)
+            if shift > 40.:
+                shift = 40.
+            if shift < -40:
+                shift = -40.
+            shifts.append(shift)
+            print(shift)
+            vals.append(val)
+
+            times.append(ctime.year + ctime.julday/365.25)
+        except:
+            pass
+        ctime += 24*60*60*10
+    with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'wb') as f:
+        pickle.dump([shifts, vals, times], f)
+else:
+    with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'rb') as f:
+        shifts, vals, times = pickle.load(f) 
+
+
+fig = plt.figure(1, figsize=(10,10))
+
+plt.subplot(2,1,1)
+plt.title(net + ' ' + sta + ' compared to ' + net2 + ' ' + sta2 )
+plt.plot(times, shifts,'.')
+plt.ylabel('Time Shift (ms)')
+
+plt.subplot(2,1,2)
+plt.plot(times, vals, '.')
+plt.ylim((0.8, 1.0))
+plt.xlabel('Time (year)')
+plt.ylabel('Correlation')
+
+plt.savefig(net + '_' + sta + '_' + net2 + '_' + sta2 + '.PDF', format='PDF')
