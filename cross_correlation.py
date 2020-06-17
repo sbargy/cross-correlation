@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 
-# run for AAK and BORG before and after remove_response, increase correlation range
-# send to Pete and ask about increasing the shift in correlation samples (100 -> more)
-# should the remove_response be done before the resample?
-# cli parameters: station, channel, start and end date, not timestamp
-
 # system imports
 import argparse
 import sys
@@ -33,19 +28,31 @@ def main():
                         action="store")
     parser.add_argument("startdate",
                         help="R|start date (YYYY-JJJ OR\n"
-                                                    "YYYY-MM-DD), UTC is assumed",
+                                           "YYYY-MM-DD), UTC is assumed",
                         action="store")
     parser.add_argument("enddate",
                         help="R|end date (YYYY-JJJ OR\n"
                                          "YYYY-MM-DD), UTC is assumed",
                         action="store")
+    parser.add_argument("-d", "--duration",
+                        help="the duration in seconds of the sample",
+                        action="store",
+                        type = int)
+    parser.add_argument("-k", "--keepresponse",
+                        help="don't use the remove_response call", 
+                        action="store_true")
+    parser.add_argument("-o", "--outfilename",
+                        help="the filename for the plot output file",
+                        action="store",
+                        type = str)
 
     args = parser.parse_args()
     # upper case the stations and channels
     args.sta = args.sta.upper()
     args.chan = args.chan.upper()
 
-    doCorrelation(args.net, args.sta, args.chan, args.startdate, args.enddate)
+    doCorrelation(args.net, args.sta, args.chan, args.startdate, args.enddate, args.duration, \
+                  args.keepresponse, args.outfilename)
 
 ################################################################################
 class SmartFormatter(argparse.HelpFormatter):
@@ -56,7 +63,7 @@ class SmartFormatter(argparse.HelpFormatter):
         return argparse.HelpFormatter._split_lines(self, text, width)
 
 ################################################################################
-def doCorrelation(net, sta, chan, start, end):
+def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilename):
     client = Client()
     stime = UTCDateTime(start)
     etime = UTCDateTime(end)
@@ -69,13 +76,12 @@ def doCorrelation(net, sta, chan, start, end):
     sta2 = sta
     loc = '00'
     loc2 = '10'
-    duration = 600
     
     # True to calculate values, False to read them from a pickle file
     # this might be desirable when debugging the plotting code piece
     calc = True
     
-    print(net, net2, sta, sta2, loc, loc2, duration, ctime, ctime+duration)
+    print(net, net2, sta, sta2, loc, loc2, duration, ctime, ctime+duration, keepresponse)
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
@@ -100,7 +106,9 @@ def doCorrelation(net, sta, chan, start, end):
                 # The list or tuple defines the four corner frequencies (f1, f2, f3, f4) of a 
                 # cosine taper which is one between f2 and f3 and tapers to zero 
                 # for f1 < f < f2 and f3 < f < f4.
-                st.remove_response() # is it correct to remove response before resampling?
+
+                if not keepresponse:
+                    st.remove_response() # is it correct to remove response before resampling?
     
                 st.resample(1000)
                 st.sort()
@@ -130,12 +138,20 @@ def doCorrelation(net, sta, chan, start, end):
             ctime += 24*60*60*10
     
         # persist the data in a pickle file
-        with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'wb') as f:
-            pickle.dump([shifts, vals, times], f)
+        if outfilename:
+            with open(outfilename + '.pickle', 'wb') as f:
+                pickle.dump([shifts, vals, times], f)
+        else:
+            with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'wb') as f:
+                pickle.dump([shifts, vals, times], f)
     else:
         # retrieve the data from the pickle file
-        with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'rb') as f:
-            shifts, vals, times = pickle.load(f) 
+        if outfilename:
+            with open(outfilename + '.pickle', 'rb') as f:
+                shifts, vals, times = pickle.load(f) 
+        else:
+            with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'rb') as f:
+                shifts, vals, times = pickle.load(f) 
     
     
     fig = plt.figure(1, figsize=(10,10))
@@ -152,7 +168,10 @@ def doCorrelation(net, sta, chan, start, end):
     plt.xlabel('Time (year)')
     plt.ylabel('Correlation')
     
-    plt.savefig(net + '_' + sta + '_' + net2 + '_' + sta2 + '.PDF', format='PDF')
+    if outfilename:
+        plt.savefig(outfilename + '.PDF', format='PDF')
+    else:
+        plt.savefig(net + '_' + sta + '_' + net2 + '_' + sta2 + '.PDF', format='PDF')
 
 ################################################################################
 if __name__ == '__main__':
