@@ -64,67 +64,56 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
     mpl.rc('font',serif='Times')
     mpl.rc('font',size=16)
     
+    # use same network and station
     net2= net
     sta2 = sta
-    loc = '00'
+    # both 00 and 10
+    loc_all = '*'
+    loc1 = '00'
     loc2 = '10'
     
     # True to calculate values, False to read them from a pickle file
     # this might be desirable when debugging the plotting code piece
     calc = True
     
-    print(net, net2, sta, sta2, loc, loc2, duration, ctime, ctime+duration, keepresponse)
+    print(net, net2, sta, sta2, loc_all, duration, ctime, ctime+duration, keepresponse)
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
             print("duration: ", ctime, " to ", ctime + duration)
-            try:
-                # get_waveforms gets 'duration' seconds of activity for the channel/date/location
-                st = client.get_waveforms(net, sta, loc, chan, ctime, ctime + duration, attach_response=True)
-                st += client.get_waveforms(net2, sta2, loc2, chan, ctime, ctime + duration, attach_response=True)
-    
-                # parameters for remove_response
-                #
-                # output (str)
-                # Output units, one of:
-                #    "DISP" displacement, output unit is meters
-                #    "VEL"  velocity, output unit is meters/second <---default value
-                #    "ACC"  acceleration, output unit is meters/second**2
-                #
-                # water_level (float) Water level for deconvolution.
-                #
-                # pre_filt
-                # Apply a bandpass filter in frequency domain to the data before deconvolution. 
-                # The list or tuple defines the four corner frequencies (f1, f2, f3, f4) of a 
-                # cosine taper which is one between f2 and f3 and tapers to zero 
-                # for f1 < f < f2 and f3 < f < f4.
+            cnt = 1
+            while cnt <= 4:
+                try:
+                    # get_waveforms gets 'duration' seconds of activity for the channel/date/location
+                    st = client.get_waveforms(net, sta, loc_all, chan, ctime, ctime + duration, attach_response=True)
+                    if not keepresponse:
+                        st.remove_response()
+                    break
+                except:
+                    print("get_waveforms failed, attempt #" + cnt)
+                    cnt += 1
 
-                if not keepresponse:
-                    st.remove_response() # is it correct to remove response before resampling?
+            st.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+            st.merge(fill_value=0)
+            st.resample(1000)
+            st.sort()
+
+            tr1 = st.select(location=loc1)[0]
+            tr2 = st.select(location=loc2)[0]
+            cc = correlate(tr1.data, tr2.data, 500)
+
+            # xcorr_max returns the shift and value of the maximum of the cross-correlation function
+            shift, val = xcorr_max(cc)
+            if shift > 40.:
+                shift = 40.
+            if shift < -40:
+                shift = -40.
+            # append to lists for plotting
+            shifts.append(shift)
+            vals.append(val)
+            times.append(ctime.year + ctime.julday/365.25)
     
-                st.resample(1000)
-                st.sort()
-    
-                # the following call returns a function to perform cross-correlation of two signals 
-                # up to a specified maximal shift. A value of 100 shifts 50 samples in either direction
-                cc_func = correlate(st[0].data, st[1].data, 100)
-    
-                # xcorr_max returns the shift and value of the maximum of the cross-correlation function
-                shift, val = xcorr_max(cc_func)
-                if shift > 40.:
-                    shift = 40.
-                if shift < -40:
-                    shift = -40.
-                # append to lists for plotting
-                shifts.append(shift)
-                vals.append(val)
-                times.append(ctime.year + ctime.julday/365.25)
-    
-                print('\tshift: ', shift, ' value: ', val)
-    
-            except:
-                print('\twaveforms not available')
-                pass
+            print('\tshift: ', shift, ' value: ', val)
     
             # skip 10 days for next loop
             ctime += 24*60*60*10
@@ -149,7 +138,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
     fig = plt.figure(1, figsize=(10,10))
     
     plt.subplot(2,1,1)
-    plt.title(net + ' ' + sta + ' ' + loc + ' compared to ' + net2 + ' ' + sta2 + ' ' + loc2)
+    plt.title(net + ' ' + sta + ' ' + loc1 + ' compared to ' + net2 + ' ' + sta2 + ' ' + loc2)
     plt.plot(times, shifts,'.')
     plt.ylabel('Time Shift (ms)')
     
