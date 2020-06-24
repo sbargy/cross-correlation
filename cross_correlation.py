@@ -4,11 +4,14 @@
 import argparse
 import sys
 
+# obspy imports
 from obspy.clients.fdsn import Client
 from obspy import read, UTCDateTime
 from scipy import signal
 from obspy.signal.cross_correlation import correlate, xcorr_max
+from obspy.clients.fdsn.header import FDSNNoDataException
 
+# other imports
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -37,14 +40,18 @@ def main():
     parser.add_argument("-d", "--duration",
                         help="the duration in seconds of the sample",
                         action="store",
-                        type = int)
+                        type=int)
     parser.add_argument("-k", "--keepresponse",
                         help="don't use the remove_response call", 
                         action="store_true")
     parser.add_argument("-o", "--outfilename",
                         help="the filename for the plot output file",
                         action="store",
-                        type = str)
+                        type=str)
+    parser.add_argument("-v", "--verbose",
+                        help="extra output for debugging",
+                        action="store_true", 
+                        default=False)
 
     args = parser.parse_args()
     # upper case the stations and channels
@@ -52,10 +59,10 @@ def main():
     args.chan = args.chan.upper()
 
     doCorrelation(args.net, args.sta, args.chan, args.startdate, args.enddate, args.duration, \
-                  args.keepresponse, args.outfilename)
+                  args.keepresponse, args.outfilename, args.verbose)
 
 ################################################################################
-def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilename):
+def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilename, be_verbose):
     client = Client()
     stime = UTCDateTime(start)
     etime = UTCDateTime(end)
@@ -65,7 +72,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
     mpl.rc('font',size=16)
     
     # use same network and station
-    net2= net
+    net2 = net
     sta2 = sta
     # both 00 and 10
     loc_all = '*'
@@ -76,21 +83,27 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
     # this might be desirable when debugging the plotting code piece
     calc = True
     
-    print(net, net2, sta, sta2, loc_all, duration, ctime, ctime+duration, keepresponse)
+    print(net, net2, sta, sta2, loc_all, duration, ctime, ctime+duration, keep_response)
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
-#            print("duration: ", ctime, " to ", ctime + duration)
+#           print("duration: ", ctime, " to ", ctime + duration)
             cnt = 1
             while cnt <= 4:
                 try:
                     # get_waveforms gets 'duration' seconds of activity for the channel/date/location
                     st = client.get_waveforms(net, sta, loc_all, chan, ctime, ctime + duration, attach_response=True)
-                    if not keepresponse:
+                    if not keep_response:
                         st.remove_response()
                     break
-                except:
-                    print("get_waveforms failed, attempt #" + cnt)
+                except KeyboardInterrupt:
+                    sys.exit()
+                except FDSNNoDataException:
+                    if be_verbose:
+                        print("Exception: no data available for {} to {}".format(ctime, ctime+duration))
+                except Exception as err:
+                    print(err)
+                finally:
                     cnt += 1
 
             st.filter('bandpass', freqmax=1/4., freqmin=1./8.)
@@ -100,6 +113,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
 
             tr1 = st.select(location=loc1)[0]
             tr2 = st.select(location=loc2)[0]
+            time_offset = tr1.stats.starttime - tr2.stats.starttime
             cc = correlate(tr1.data, tr2.data, 500)
 
             # xcorr_max returns the shift and value of the maximum of the cross-correlation function
@@ -113,8 +127,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
             vals.append(val)
             times.append(ctime.year + ctime.julday/365.25)
     
-#            print('\tshift: ', shift, ' value: ', val)
-            print("duration: ", ctime, " to ", ctime + duration, "\tshift: ", shift, " value: ", val)
+            print("duration: {} to {} offset: {}\tshift: {} value: {}".format(ctime, ctime+duration, time_offset, shift, val))
     
             # skip 10 days for next loop
             ctime += 24*60*60*10
