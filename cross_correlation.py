@@ -80,7 +80,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
-            print("duration: ", ctime, " to ", ctime + duration)
+#            print("duration: ", ctime, " to ", ctime + duration)
             cnt = 1
             while cnt <= 4:
                 try:
@@ -104,16 +104,17 @@ def doCorrelation(net, sta, chan, start, end, duration, keepresponse, outfilenam
 
             # xcorr_max returns the shift and value of the maximum of the cross-correlation function
             shift, val = xcorr_max(cc)
-            if shift > 40.:
-                shift = 40.
-            if shift < -40:
-                shift = -40.
+#            if shift > 40.:
+#                shift = 40.
+#            if shift < -40:
+#                shift = -40.
             # append to lists for plotting
             shifts.append(shift)
             vals.append(val)
             times.append(ctime.year + ctime.julday/365.25)
     
-            print('\tshift: ', shift, ' value: ', val)
+#            print('\tshift: ', shift, ' value: ', val)
+            print("duration: ", ctime, " to ", ctime + duration, "\tshift: ", shift, " value: ", val)
     
             # skip 10 days for next loop
             ctime += 24*60*60*10
