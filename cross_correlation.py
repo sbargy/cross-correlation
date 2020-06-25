@@ -10,6 +10,7 @@ from obspy import read, UTCDateTime
 from scipy import signal
 from obspy.signal.cross_correlation import correlate, xcorr_max
 from obspy.clients.fdsn.header import FDSNNoDataException
+from obspy.core.stream import Stream
 
 # other imports
 import numpy as np
@@ -83,12 +84,12 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
     # this might be desirable when debugging the plotting code piece
     calc = True
     
-    print(net, net2, sta, sta2, loc_all, duration, ctime, ctime+duration, keep_response)
+    print(net, net2, sta, sta2, loc_all, duration, stime, etime, keep_response)
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
-#           print("duration: ", ctime, " to ", ctime + duration)
             cnt = 1
+            st = Stream()
             while cnt <= 4:
                 try:
                     # get_waveforms gets 'duration' seconds of activity for the channel/date/location
@@ -100,36 +101,38 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
                     sys.exit()
                 except FDSNNoDataException:
                     if be_verbose:
-                        print("Exception: no data available for {} to {}".format(ctime, ctime+duration))
+                        print("Exception: no data available for {} to {}".format(ctime, ctime+duration), file=sys.stderr)
                 except Exception as err:
-                    print(err)
+                    print(err, file=sys.stderr)
                 finally:
                     cnt += 1
 
-            st.filter('bandpass', freqmax=1/4., freqmin=1./8.)
-            st.merge(fill_value=0)
-            st.resample(1000)
-            st.sort()
+            if len(st) != 2:
+                if be_verbose:
+                    print("{} trace(s) returned for {} {} {}".format(len(st), net, sta, ctime), file=sys.stderr)
+            else:
+                st.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+                st.merge(fill_value=0)
+                st.resample(1000)
+                st.sort()
 
-            tr1 = st.select(location=loc1)[0]
-            tr2 = st.select(location=loc2)[0]
-            time_offset = tr1.stats.starttime - tr2.stats.starttime
-            cc = correlate(tr1.data, tr2.data, 500)
+                tr1 = st.select(location=loc1)[0]
+                tr2 = st.select(location=loc2)[0]
+                time_offset = tr1.stats.starttime - tr2.stats.starttime
+                cc = correlate(tr1.data, tr2.data, 500)
 
-            # xcorr_max returns the shift and value of the maximum of the cross-correlation function
-            shift, val = xcorr_max(cc)
-#            if shift > 40.:
-#                shift = 40.
-#            if shift < -40:
-#                shift = -40.
-            # append to lists for plotting
-            shifts.append(shift)
-            vals.append(val)
-            times.append(ctime.year + ctime.julday/365.25)
+                # xcorr_max returns the shift and value of the maximum of the cross-correlation function
+                shift, val = xcorr_max(cc)
+                # append to lists for plotting
+                shifts.append(shift)
+                vals.append(val)
+                times.append(ctime.year + ctime.julday/365.25)
     
-            print("duration: {} to {} offset: {}\tshift: {} value: {}".format(ctime, ctime+duration, time_offset, shift, val))
+                print("duration: {} to {} offset: {}\tshift: {} value: {}".format(ctime, ctime+duration, time_offset, shift, val))
     
             # skip 10 days for next loop
+            if be_verbose:
+                print("ctime: {}".format(ctime), file=sys.stderr)
             ctime += 24*60*60*10
     
         # persist the data in a pickle file
