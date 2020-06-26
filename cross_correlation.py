@@ -118,6 +118,25 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
 
                 tr1 = st.select(location=loc1)[0]
                 tr2 = st.select(location=loc2)[0]
+
+                # trim sample to start and end at the same times
+                trace_start = max(tr1.stats.starttime, tr2.stats.starttime)
+                trace_end   = min(tr1.stats.endtime, tr2.stats.endtime)
+                # debug
+                if be_verbose:
+                    print("Before trim", file=sys.stderr)
+                    print("tr1 start: {} tr2 start: {}".format(tr1.stats.starttime, tr2.stats.starttime), file=sys.stderr)
+                    print("tr1 end: {} tr2 end: {}".format(tr1.stats.endtime, tr2.stats.endtime), file=sys.stderr)
+                    print("max trace_start: {} min trace_end {}".format(trace_start, trace_end), file=sys.stderr)
+                tr1.trim(trace_start, trace_end)
+                tr2.trim(trace_start, trace_end)
+                # debug
+                if be_verbose:
+                    print("After trim", file=sys.stderr)
+                    print("tr1 start: {} tr2 start: {}".format(tr1.stats.starttime, tr2.stats.starttime), file=sys.stderr)
+                    print("tr1 end: {} tr2 end: {}".format(tr1.stats.endtime, tr2.stats.endtime), file=sys.stderr)
+
+                # calculate time offset
                 time_offset = tr1.stats.starttime - tr2.stats.starttime
                 cc = correlate(tr1.data, tr2.data, 500)
 
