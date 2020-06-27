@@ -64,70 +64,62 @@ def main():
 
 ################################################################################
 def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilename, be_verbose):
-    client = Client()
     stime = UTCDateTime(start)
     etime = UTCDateTime(end)
     ctime = stime
-    
-    mpl.rc('font',serif='Times')
-    mpl.rc('font',size=16)
-    
-    # use same network and station
-    net2 = net
-    sta2 = sta
-    # both 00 and 10
-    loc_all = '*'
-    loc1 = '00'
-    loc2 = '10'
+    skiptime = 24*60*60*10 # 10 days in seconds, TODO make a command line parameter
+
+    # location constants
+    LOC00 = '00'
+    LOC10 = '10'
     
     # True to calculate values, False to read them from a pickle file
     # this might be desirable when debugging the plotting code piece
     calc = True
     
-    print(net, net2, sta, sta2, loc_all, duration, stime, etime, keep_response)
+    print(net, sta, LOC00, LOC10, duration, stime, etime, keep_response)
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
             cnt = 1
-            st = Stream()
-            while cnt <= 4:
-                try:
-                    # get_waveforms gets 'duration' seconds of activity for the channel/date/location
-                    st = client.get_waveforms(net, sta, loc_all, chan, ctime, ctime + duration, attach_response=True)
-                    if not keep_response:
-                        st.remove_response()
-                    break
-                except KeyboardInterrupt:
-                    sys.exit()
-                except FDSNNoDataException:
-                    if be_verbose:
-                        print("Exception: no data available for {} to {}".format(ctime, ctime+duration), file=sys.stderr)
-                except Exception as err:
-                    print(err, file=sys.stderr)
-                finally:
-                    cnt += 1
 
-            if len(st) != 2:
+            st00 = getStream(net, sta, LOC00, chan, ctime, duration)
+            st10 = getStream(net, sta, LOC10, chan, ctime, duration)
+
+            if not keep_response:
+                st00.remove_response()
+                st10.remove_response()
+
+            if len(st00) == 0:
                 if be_verbose:
-                    print("{} trace(s) returned for {} {} {}".format(len(st), net, sta, ctime), file=sys.stderr)
-            else:
+                    print("no traces returned for {} {} {} 00 {}".format(net, sta, ctime), file=sys.stderr)
+                continue
+
+            if len(st10) == 0:
+                if be_verbose:
+                    print("no traces returned for {} {} 10 {}".format(net, sta, ctime), file=sys.stderr)
+                continue
+
+            # need to break these into two separate ifs and then trim...
+            if len(st00) >= 1 and len(st00) >= 1:
                 st.filter('bandpass', freqmax=1/4., freqmin=1./8.)
                 st.merge(fill_value=0)
                 st.resample(1000)
                 st.sort()
 
                 try:
-                    tr1 = st.select(location=loc1)[0]
+                    tr1 = st.select(location=LOC00)[0]
                 except Exception as err:
                     print(err, file=sys.stderr)
                 try:
-                    tr2 = st.select(location=loc2)[0]
+                    tr2 = st.select(location=LOC10)[0]
                 except Exception as err:
                     print(err, file=sys.stderr)
 
                 # trim sample to start and end at the same times
                 trace_start = max(tr1.stats.starttime, tr2.stats.starttime)
                 trace_end   = min(tr1.stats.endtime, tr2.stats.endtime)
+
                 # debug
                 if be_verbose:
                     print("Before trim", file=sys.stderr)
@@ -158,14 +150,14 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
             # skip 10 days for next loop
             if be_verbose:
                 print("ctime: {}".format(ctime), file=sys.stderr)
-            ctime += 24*60*60*10
+            ctime += skiptime
     
         # persist the data in a pickle file
         if outfilename:
             with open(outfilename + '.pickle', 'wb') as f:
                 pickle.dump([shifts, vals, times], f)
         else:
-            with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'wb') as f:
+            with open(net + '_' + sta + '_' + net + '_' + sta + '.pickle', 'wb') as f:
                 pickle.dump([shifts, vals, times], f)
     else:
         # retrieve the data from the pickle file
@@ -173,14 +165,17 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
             with open(outfilename + '.pickle', 'rb') as f:
                 shifts, vals, times = pickle.load(f) 
         else:
-            with open(net + '_' + sta + '_' + net2 + '_' + sta2 + '.pickle', 'rb') as f:
+            with open(net + '_' + sta + '_' + net + '_' + sta + '.pickle', 'rb') as f:
                 shifts, vals, times = pickle.load(f) 
     
+    
+    mpl.rc('font',serif='Times')
+    mpl.rc('font',size=16)
     
     fig = plt.figure(1, figsize=(10,10))
     
     plt.subplot(2,1,1)
-    plt.title(net + ' ' + sta + ' ' + loc1 + ' compared to ' + net2 + ' ' + sta2 + ' ' + loc2)
+    plt.title(net + ' ' + sta + ' ' + LOC00 + ' compared to ' + net + ' ' + sta + ' ' + LOC10)
     plt.plot(times, shifts,'.')
     plt.ylabel('Time Shift (ms)')
     
@@ -194,7 +189,30 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
     if outfilename:
         plt.savefig(outfilename + '.PDF', format='PDF')
     else:
-        plt.savefig(net + '_' + sta + '_' + net2 + '_' + sta2 + '.PDF', format='PDF')
+        plt.savefig(net + '_' + sta + '_' + net + '_' + sta + '.PDF', format='PDF')
+
+################################################################################
+class getStream(net, sta, loc, chan, ctime, duration):
+    cnt = 1
+    client = Client()
+    st = Stream()
+
+    while cnt <= 4:
+        try:
+            # get_waveforms gets 'duration' seconds of activity for the channel/date/location
+            st = client.get_waveforms(net, sta, loc, chan, ctime, ctime + duration, attach_response=True)
+            break
+        except KeyboardInterrupt:
+            sys.exit()
+        except FDSNNoDataException:
+            if be_verbose:
+                print("Exception: no data available for {} to {}".format(ctime, ctime+duration), file=sys.stderr)
+        except Exception as err:
+            print(err, file=sys.stderr)
+        finally:
+            cnt += 1
+
+    return st
 
 ################################################################################
 class SmartFormatter(argparse.HelpFormatter):
