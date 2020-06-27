@@ -116,8 +116,14 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
                 st.resample(1000)
                 st.sort()
 
-                tr1 = st.select(location=loc1)[0]
-                tr2 = st.select(location=loc2)[0]
+                try:
+                    tr1 = st.select(location=loc1)[0]
+                except Exception as err:
+                    print(err, file=sys.stderr)
+                try:
+                    tr2 = st.select(location=loc2)[0]
+                except Exception as err:
+                    print(err, file=sys.stderr)
 
                 # trim sample to start and end at the same times
                 trace_start = max(tr1.stats.starttime, tr2.stats.starttime)
