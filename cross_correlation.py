@@ -92,12 +92,12 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
 
             if len(st00) == 0:
                 if be_verbose:
-                    print("no traces returned for {} {} {} 00 {}".format(net, sta, ctime), file=sys.stderr)
+                    print("no traces returned for {} {} {} 00 {}".format(net, sta, chan, ctime), file=sys.stderr)
                 continue
 
             if len(st10) == 0:
                 if be_verbose:
-                    print("no traces returned for {} {} 10 {}".format(net, sta, ctime), file=sys.stderr)
+                    print("no traces returned for {} {} 10 {}".format(net, sta, chan, ctime), file=sys.stderr)
                 continue
 
             # need to break these into two separate ifs and then trim...
