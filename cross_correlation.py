@@ -92,15 +92,22 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
 
             if len(st00) == 0:
                 if be_verbose:
-                    print("no traces returned for {} {} {} 00 {}".format(net, sta, chan, ctime), file=sys.stderr)
+                    print("no traces returned for {} {} {} {} {}".format(net, sta, LOC00, chan, ctime), file=sys.stderr)
                 ctime += skiptime
                 continue
 
             if len(st10) == 0:
                 if be_verbose:
-                    print("no traces returned for {} {} 10 {}".format(net, sta, chan, ctime), file=sys.stderr)
+                    print("no traces returned for {} {} {} {} {}".format(net, sta, LOC10, chan, ctime), file=sys.stderr)
                 ctime += skiptime
                 continue
+
+            if (len(st00) > 1) or (len(st10) > 1):
+                if be_verbose:
+                    print("gap(s) found in segment, skipping.")
+                ctime += skiptime
+                continue
+
 
             # need to break these into two separate ifs and then trim...
             if len(st00) >= 1 and len(st00) >= 1:
