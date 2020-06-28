@@ -42,6 +42,11 @@ def main():
                         help="the duration in seconds of the sample",
                         action="store",
                         type=int)
+    parser.add_argument("-i", "--interval",
+                        help="interval in minutes to skip between segments",
+                        action="store",
+                        default="14400",
+                        type=int)
     parser.add_argument("-k", "--keepresponse",
                         help="don't use the remove_response call", 
                         action="store_true")
@@ -60,14 +65,16 @@ def main():
     args.chan = args.chan.upper()
 
     doCorrelation(args.net, args.sta, args.chan, args.startdate, args.enddate, args.duration, \
-                  args.keepresponse, args.outfilename, args.verbose)
+                  args.interval, args.keepresponse, args.outfilename, args.verbose)
 
 ################################################################################
-def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilename, be_verbose):
+def doCorrelation(net, sta, chan, start, end, duration, interval, 
+                  keep_response, outfilename, be_verbose):
     stime = UTCDateTime(start)
     etime = UTCDateTime(end)
     ctime = stime
     skiptime = 24*60*60*10 # 10 days in seconds, TODO make a command line parameter
+    skiptime = interval*60 #
 
     # location constants
     LOC00 = '00'
@@ -77,7 +84,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
     # this might be desirable when debugging the plotting code piece
     calc = True
     
-    print(net, sta, LOC00, LOC10, duration, stime, etime, keep_response)
+    print(net, sta, LOC00, LOC10, duration, interval, stime, etime, keep_response)
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
