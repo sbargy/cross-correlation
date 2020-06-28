@@ -206,7 +206,7 @@ def getStream(net, sta, loc, chan, ctime, duration, be_verbose):
             sys.exit()
         except FDSNNoDataException:
             if be_verbose:
-                print("Exception: no data available for {} to {}".format(ctime, ctime+duration), file=sys.stderr)
+                print(f"No data available for {net}.{sta}.{loc}.{chan} {ctime} to {ctime+duration}", file=sys.stderr)
         except Exception as err:
             print(err, file=sys.stderr)
         finally:
