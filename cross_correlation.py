@@ -83,8 +83,8 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
         while ctime < etime:
             cnt = 1
 
-            st00 = getStream(net, sta, LOC00, chan, ctime, duration)
-            st10 = getStream(net, sta, LOC10, chan, ctime, duration)
+            st00 = getStream(net, sta, LOC00, chan, ctime, duration, be_verbose)
+            st10 = getStream(net, sta, LOC10, chan, ctime, duration, be_verbose)
 
             if not keep_response:
                 st00.remove_response()
@@ -192,7 +192,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
         plt.savefig(net + '_' + sta + '_' + net + '_' + sta + '.PDF', format='PDF')
 
 ################################################################################
-def getStream(net, sta, loc, chan, ctime, duration):
+def getStream(net, sta, loc, chan, ctime, duration, be_verbose):
     cnt = 1
     client = Client()
     st = Stream()
