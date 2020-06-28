@@ -111,17 +111,21 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
 
             # need to break these into two separate ifs and then trim...
             if len(st00) >= 1 and len(st00) >= 1:
-                st.filter('bandpass', freqmax=1/4., freqmin=1./8.)
-                st.merge(fill_value=0)
-                st.resample(1000)
-                st.sort()
+
+                st00.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+                st00.merge(fill_value=0)
+                st00.resample(1000)
+
+                st10.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+                st10.merge(fill_value=0)
+                st10.resample(1000)
 
                 try:
-                    tr1 = st.select(location=LOC00)[0]
+                    tr1 = st00.select(location=LOC00)[0]
                 except Exception as err:
                     print(err, file=sys.stderr)
                 try:
-                    tr2 = st.select(location=LOC10)[0]
+                    tr2 = st10.select(location=LOC10)[0]
                 except Exception as err:
                     print(err, file=sys.stderr)
 
