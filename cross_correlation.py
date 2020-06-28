@@ -192,7 +192,7 @@ def doCorrelation(net, sta, chan, start, end, duration, keep_response, outfilena
         plt.savefig(net + '_' + sta + '_' + net + '_' + sta + '.PDF', format='PDF')
 
 ################################################################################
-class getStream(net, sta, loc, chan, ctime, duration):
+def getStream(net, sta, loc, chan, ctime, duration):
     cnt = 1
     client = Client()
     st = Stream()
