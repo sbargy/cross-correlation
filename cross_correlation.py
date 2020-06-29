@@ -73,7 +73,7 @@ def doCorrelation(net, sta, chan, start, end, duration, interval,
     stime = UTCDateTime(start)
     etime = UTCDateTime(end)
     ctime = stime
-    skiptime = 24*60*60*10 # 10 days in seconds, TODO make a command line parameter
+    skiptime = 24*60*60*10 # 10 days in seconds. Override with --interval <minutes> option
     skiptime = interval*60 #
 
     # location constants
