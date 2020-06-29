@@ -93,10 +93,6 @@ def doCorrelation(net, sta, chan, start, end, duration, interval,
             st00 = getStream(net, sta, LOC00, chan, ctime, duration, be_verbose)
             st10 = getStream(net, sta, LOC10, chan, ctime, duration, be_verbose)
 
-            if not keep_response:
-                st00.remove_response()
-                st10.remove_response()
-
             if len(st00) == 0:
                 if be_verbose:
                     print("no traces returned for {} {} {} {} {}".format(net, sta, LOC00, chan, ctime), file=sys.stderr)
@@ -109,63 +105,81 @@ def doCorrelation(net, sta, chan, start, end, duration, interval,
                 ctime += skiptime
                 continue
 
-            if (len(st00) > 1) or (len(st10) > 1):
+            if len(st00) > 1:
                 if be_verbose:
-                    print("gap(s) found in segment, skipping.")
+                    print("gap(s) found in segment for {} {} {} {} {}".format(net, sta, LOC00, chan, ctime), file=sys.stderr)
                 ctime += skiptime
                 continue
 
-
-            # need to break these into two separate ifs and then trim...
-            if len(st00) >= 1 and len(st00) >= 1:
-
-                st00.filter('bandpass', freqmax=1/4., freqmin=1./8.)
-                st00.merge(fill_value=0)
-                st00.resample(1000)
-
-                st10.filter('bandpass', freqmax=1/4., freqmin=1./8.)
-                st10.merge(fill_value=0)
-                st10.resample(1000)
-
-                try:
-                    tr1 = st00.select(location=LOC00)[0]
-                except Exception as err:
-                    print(err, file=sys.stderr)
-                try:
-                    tr2 = st10.select(location=LOC10)[0]
-                except Exception as err:
-                    print(err, file=sys.stderr)
-
-                # trim sample to start and end at the same times
-                trace_start = max(tr1.stats.starttime, tr2.stats.starttime)
-                trace_end   = min(tr1.stats.endtime, tr2.stats.endtime)
-
-                # debug
+            if len(st10) > 1:
                 if be_verbose:
-                    print("Before trim", file=sys.stderr)
-                    print("tr1 start: {} tr2 start: {}".format(tr1.stats.starttime, tr2.stats.starttime), file=sys.stderr)
-                    print("tr1 end: {} tr2 end: {}".format(tr1.stats.endtime, tr2.stats.endtime), file=sys.stderr)
-                    print("max trace_start: {} min trace_end {}".format(trace_start, trace_end), file=sys.stderr)
-                tr1.trim(trace_start, trace_end)
-                tr2.trim(trace_start, trace_end)
-                # debug
+                    print("gap(s) found in segment for {} {} {} {} {}".format(net, sta, LOC10, chan, ctime), file=sys.stderr)
+                ctime += skiptime
+                continue
+
+            if ((st00[0].stats.endtime - st00[0].stats.starttime) < (duration - 1.0/st00[0].stats.sampling_rate)):
                 if be_verbose:
-                    print("After trim", file=sys.stderr)
-                    print("tr1 start: {} tr2 start: {}".format(tr1.stats.starttime, tr2.stats.starttime), file=sys.stderr)
-                    print("tr1 end: {} tr2 end: {}".format(tr1.stats.endtime, tr2.stats.endtime), file=sys.stderr)
+                    print("skipping short segment in {} {} {} {} {}".format(net, sta, LOC00, chan, ctime), file=sys.stderr)
+                ctime += skiptime
+                continue
 
-                # calculate time offset
-                time_offset = tr1.stats.starttime - tr2.stats.starttime
-                cc = correlate(tr1.data, tr2.data, 500)
+            if ((st10[0].stats.endtime - st10[0].stats.starttime) < (duration - 1.0/st10[0].stats.sampling_rate)):
+                if be_verbose:
+                    print("skipping short segment in {} {} {} {} {}".format(net, sta, LOC10, chan, ctime), file=sys.stderr)
+                ctime += skiptime
+                continue
 
-                # xcorr_max returns the shift and value of the maximum of the cross-correlation function
-                shift, val = xcorr_max(cc)
-                # append to lists for plotting
-                shifts.append(shift)
-                vals.append(val)
-                times.append(ctime.year + ctime.julday/365.25)
+            if not keep_response:
+                st00.remove_response()
+                st10.remove_response()
+
+            st00.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+            st00.merge(fill_value=0)
+            st00.resample(1000)
+
+            st10.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+            st10.merge(fill_value=0)
+            st10.resample(1000)
+
+            try:
+                tr1 = st00.select(location=LOC00)[0]
+            except Exception as err:
+                print(err, file=sys.stderr)
+            try:
+                tr2 = st10.select(location=LOC10)[0]
+            except Exception as err:
+                print(err, file=sys.stderr)
+
+            # trim sample to start and end at the same times
+            trace_start = max(tr1.stats.starttime, tr2.stats.starttime)
+            trace_end   = min(tr1.stats.endtime, tr2.stats.endtime)
+
+            # debug
+            if be_verbose:
+                print("Before trim", file=sys.stderr)
+                print("tr1 start: {} tr2 start: {}".format(tr1.stats.starttime, tr2.stats.starttime), file=sys.stderr)
+                print("tr1 end: {} tr2 end: {}".format(tr1.stats.endtime, tr2.stats.endtime), file=sys.stderr)
+                print("max trace_start: {} min trace_end {}".format(trace_start, trace_end), file=sys.stderr)
+            tr1.trim(trace_start, trace_end)
+            tr2.trim(trace_start, trace_end)
+            # debug
+            if be_verbose:
+                print("After trim", file=sys.stderr)
+                print("tr1 start: {} tr2 start: {}".format(tr1.stats.starttime, tr2.stats.starttime), file=sys.stderr)
+                print("tr1 end: {} tr2 end: {}".format(tr1.stats.endtime, tr2.stats.endtime), file=sys.stderr)
+
+            # calculate time offset
+            time_offset = tr1.stats.starttime - tr2.stats.starttime
+            cc = correlate(tr1.data, tr2.data, 500)
+
+            # xcorr_max returns the shift and value of the maximum of the cross-correlation function
+            shift, val = xcorr_max(cc)
+            # append to lists for plotting
+            shifts.append(shift)
+            vals.append(val)
+            times.append(ctime.year + ctime.julday/365.25)
     
-                print("duration: {} to {} offset: {}\tshift: {} value: {}".format(ctime, ctime+duration, time_offset, shift, val))
+            print("duration: {} to {} offset: {}\tshift: {} value: {}".format(ctime, ctime+duration, time_offset, shift, val))
     
             # skip 10 days for next loop
             if be_verbose:
