@@ -133,11 +133,11 @@ def doCorrelation(net, sta, chan, start, end, duration, interval,
                 st00.remove_response()
                 st10.remove_response()
 
-            st00.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+            st00.filter('bandpass', freqmax=1/4., freqmin=1./8., zerophase=True)
             st00.merge(fill_value=0)
             st00.resample(1000)
 
-            st10.filter('bandpass', freqmax=1/4., freqmin=1./8.)
+            st10.filter('bandpass', freqmax=1/4., freqmin=1./8., zerophase=True)
             st10.merge(fill_value=0)
             st10.resample(1000)
 
