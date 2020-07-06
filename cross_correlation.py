@@ -6,7 +6,7 @@ import sys
 
 # obspy imports
 from obspy.clients.fdsn import Client
-from obspy import read, UTCDateTime
+from obspy import read, read_inventory, UTCDateTime
 from scipy import signal
 from obspy.signal.cross_correlation import correlate, xcorr_max
 from obspy.clients.fdsn.header import FDSNNoDataException
@@ -54,6 +54,10 @@ def main():
                         help="the filename for the plot output file",
                         action="store",
                         type=str)
+    parser.add_argument("-r", "--responsefilepath",
+                        help="the path to the response file location, the filename is generated in code",
+                        action="store",
+                        type=str)
     parser.add_argument("-v", "--verbose",
                         help="extra output for debugging",
                         action="store_true", 
@@ -65,11 +69,11 @@ def main():
     args.chan = args.chan.upper()
 
     doCorrelation(args.net, args.sta, args.chan, args.startdate, args.enddate, args.duration, \
-                  args.interval, args.keepresponse, args.outfilename, args.verbose)
+                  args.interval, args.keepresponse, args.outfilename, args.responsefilepath, args.verbose)
 
 ################################################################################
 def doCorrelation(net, sta, chan, start, end, duration, interval, 
-                  keep_response, outfilename, be_verbose):
+                  keep_response, outfilename, resp_filepath, be_verbose):
     stime = UTCDateTime(start)
     etime = UTCDateTime(end)
     ctime = stime
@@ -84,14 +88,20 @@ def doCorrelation(net, sta, chan, start, end, duration, interval,
     # this might be desirable when debugging the plotting code piece
     calc = True
     
-    print(net, sta, LOC00, LOC10, duration, interval, stime, etime, keep_response)
+    print(net, sta, LOC00, LOC10, duration, interval, stime, etime, keep_response, resp_filepath)
     if calc:
         times, shifts, vals = [],[], []
         while ctime < etime:
             cnt = 1
+            attach_response = True
 
-            st00 = getStream(net, sta, LOC00, chan, ctime, duration, be_verbose)
-            st10 = getStream(net, sta, LOC10, chan, ctime, duration, be_verbose)
+            if resp_filepath:
+                inv00 = read_inventory(f'{resp_filepath}/RESP.{net}.{sta}.{LOC00}.{chan}', 'RESP')
+                inv10 = read_inventory(f'{resp_filepath}/RESP.{net}.{sta}.{LOC10}.{chan}', 'RESP')
+                attach_response = False
+
+            st00 = getStream(net, sta, LOC00, chan, ctime, duration, be_verbose, attach_response)
+            st10 = getStream(net, sta, LOC10, chan, ctime, duration, be_verbose, attach_response)
 
             if len(st00) == 0:
                 if be_verbose:
@@ -129,16 +139,22 @@ def doCorrelation(net, sta, chan, start, end, duration, interval,
                 ctime += skiptime
                 continue
 
+            if not attach_response:
+                st00.attach_response(inv00)
+                st10.attach_response(inv10)
+
             if not keep_response:
                 st00.remove_response()
                 st10.remove_response()
 
+            # apply a bandpass filter and merge before resampling
             st00.filter('bandpass', freqmax=1/4., freqmin=1./8., zerophase=True)
             st00.resample(1000)
 
             st10.filter('bandpass', freqmax=1/4., freqmin=1./8., zerophase=True)
             st10.resample(1000)
 
+            # get the traces from the stream for each location
             try:
                 tr1 = st00.select(location=LOC00)[0]
             except Exception as err:
@@ -224,7 +240,7 @@ def doCorrelation(net, sta, chan, start, end, duration, interval,
         plt.savefig(net + '_' + sta + '_' + net + '_' + sta + '.PDF', format='PDF')
 
 ################################################################################
-def getStream(net, sta, loc, chan, ctime, duration, be_verbose):
+def getStream(net, sta, loc, chan, ctime, duration, be_verbose, attach_response):
     cnt = 1
     client = Client()
     st = Stream()
@@ -232,7 +248,11 @@ def getStream(net, sta, loc, chan, ctime, duration, be_verbose):
     while cnt <= 4:
         try:
             # get_waveforms gets 'duration' seconds of activity for the channel/date/location
-            st = client.get_waveforms(net, sta, loc, chan, ctime, ctime + duration, attach_response=True)
+            # only attach response if we're not using a response file
+            if attach_response:
+                st = client.get_waveforms(net, sta, loc, chan, ctime, ctime + duration, attach_response=True)
+            else:
+                st = client.get_waveforms(net, sta, loc, chan, ctime, ctime + duration)
             break
         except KeyboardInterrupt:
             sys.exit()
